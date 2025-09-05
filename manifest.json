@@ -2,7 +2,7 @@
     "name": "我的PWA應用",
     "short_name": "我的PWA",
     "description": "一個示例渐進式Web應用",
-    "start_url": "/index.html",
+    "start_url": "index.html",
     "display": "standalone",
     "background_color": "#f5f5f5",
     "theme_color": "#4caf50",
@@ -51,3 +51,4 @@
     ]
 
   }
+
