@@ -1,9 +1,9 @@
 const CACHE_NAME = 'my-pwa-cache-v1';
 const urlsToCache = [
-  '/',
   'index.html',
-  'icon-72.png',
-  'icon-192.png'
+  'manifest.json',
+  'icon-192.png',
+  'icon-512.png'
 ];
 
 // 安装Service Worker
@@ -48,6 +48,7 @@ self.addEventListener('activate', event => {
   );
 
 });
+
 
 
 
