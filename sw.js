@@ -2,7 +2,6 @@ const CACHE_NAME = 'my-pwa-cache-v1';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/styles.css',
   'icon-72.png',
   'icon-192.png'
 ];
@@ -49,4 +48,5 @@ self.addEventListener('activate', event => {
   );
 
 });
+
 
