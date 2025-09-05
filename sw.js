@@ -3,8 +3,6 @@ const urlsToCache = [
   '/',
   '/index.html',
   '/styles.css',
-  '/app.js',
-  'icon-72.png',
   'icon-192.png'
 ];
 
@@ -48,4 +46,5 @@ self.addEventListener('activate', event => {
       );
     })
   );
+
 });
