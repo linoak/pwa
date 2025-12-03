@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bulma 行動版線上鋼琴 (Compact)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        /* --- 尺寸設定區 (在此處修改尺寸) --- */
+        :root {
+            --piano-height: 160px; /* 整體高度縮小 (原 250px) */
+            
+            --white-w: 36px;       /* 白鍵寬度縮小 (原 50px) */
+            --white-h: 100%;       /* 白鍵高度 */
+            
+            --black-w: 22px;       /* 黑鍵寬度縮小 (原 30px) */
+            --black-h: 60%;        /* 黑鍵高度比例 */
+        }
+
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #f5f5f5;
+            overflow: hidden;
+            touch-action: none; /* 禁止瀏覽器默認觸控行為 */
+        }
+
+        .section {
+            padding: 1.5rem 1.5rem; /* 減少 Bulma 預設間距 */
+        }
+
+        /* 鋼琴容器 */
+        .piano-container {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 10px 0; /* 減少邊距 */
+            background: #222;
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.5);
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+            position: relative; /* 重要 */
+        }
+        .piano-container::-webkit-scrollbar { display: none; }
+
+        .keyboard {
+            position: relative;
+            display: flex;
+            height: var(--piano-height);
+            /* 寬度將由 JS 動態設定，確保包裹 */
+            padding: 0 10px; 
+            margin: 0 auto;
+        }
+
+        /* 白鍵通用樣式 */
+        .key.white {
+            width: var(--white-w);
+            height: var(--white-h);
+            background: white;
+            border: 1px solid #999;
+            border-radius: 0 0 4px 4px;
+            z-index: 1;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+            position: relative; /* 參與 Flex 排列 */
+            flex-shrink: 0;     /* 防止被壓縮 */
+            cursor: pointer;
+            transition: background 0.1s, transform 0.05s;
+        }
+        .key.white:active, .key.white.active {
+            background: #eee;
+            transform: translateY(2px);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            border-bottom: 3px solid #ddd;
+        }
+
+        /* 黑鍵通用樣式 */
+        .key.black {
+            width: var(--black-w);
+            height: var(--black-h);
+            background: #111;
+            position: absolute; /* 絕對定位，不佔據 Flex 空間 */
+            top: 0;
+            z-index: 2;
+            border-radius: 0 0 3px 3px;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            cursor: pointer;
+            transition: background 0.1s;
+            /* left 位置現在由 JS 計算 */
+        }
+        .key.black:active, .key.black.active {
+            background: #444;
+        }
+
+        /* 音名標籤樣式調整 */
+        .note-label {
+            position: absolute;
+            bottom: 5px;
+            width: 100%;
+            text-align: center;
+            font-size: 9px; /* 字體縮小 */
+            color: #aaa;
+            pointer-events: none;
+        }
+
+        .controls-panel {
+            background: white;
+            padding: 0.8rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .playing-indicator {
+            height: 20px;
+            font-size: 0.8rem;
+            color: #3273dc;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <section class="section controls-panel">
+        <div class="container">
+            <h1 class="title is-5 has-text-centered mb-2">
+                <i class="fas fa-music"></i> 行動鋼琴 (Compact)
+            </h1>
+            
+            <div class="columns is-mobile is-centered is-vcentered">
+                <div class="column is-narrow">
+                    <div class="select is-small is-rounded">
+                        <select id="songSelect">
+                            <option value="furElise">給愛麗絲</option>
+                            <option value="twinkle">小星星</option>
+                            <option value="scale">C 大調音階</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="column is-narrow">
+                    <button class="button is-primary is-small is-rounded" id="playBtn">
+                        <i class="fas fa-play mr-1"></i> 播放
+                    </button>
+                    <button class="button is-danger is-small is-rounded" id="stopBtn" disabled>
+                        <i class="fas fa-stop mr-1"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="playing-indicator" id="statusText">請點擊琴鍵</div>
+        </div>
+    </section>
+
+    <div class="piano-container" id="pianoScroll">
+        <div class="keyboard" id="keyboard">
+            </div>
+    </div>
+
+    <div class="has-text-centered mt-2" style="font-size: 0.75rem; color: #888;">
+        <i class="fas fa-arrows-alt-h"></i> 左右滑動以彈奏更多音階
+    </div>
+
+    <script>
+        let audioCtx;
+        
+        // 頻率表
+        const noteFrequencies = {
+            'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
+            'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+            'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.25, 'F5': 698.46
+        };
+
+        // 琴鍵順序
+        const notesOrder = [
+            { n: 'C', o: 3, t: 'w' }, { n: 'C#', o: 3, t: 'b' }, { n: 'D', o: 3, t: 'w' }, { n: 'D#', o: 3, t: 'b' }, { n: 'E', o: 3, t: 'w' },
+            { n: 'F', o: 3, t: 'w' }, { n: 'F#', o: 3, t: 'b' }, { n: 'G', o: 3, t: 'w' }, { n: 'G#', o: 3, t: 'b' }, { n: 'A', o: 3, t: 'w' }, { n: 'A#', o: 3, t: 'b' }, { n: 'B', o: 3, t: 'w' },
+            { n: 'C', o: 4, t: 'w' }, { n: 'C#', o: 4, t: 'b' }, { n: 'D', o: 4, t: 'w' }, { n: 'D#', o: 4, t: 'b' }, { n: 'E', o: 4, t: 'w' },
+            { n: 'F', o: 4, t: 'w' }, { n: 'F#', o: 4, t: 'b' }, { n: 'G', o: 4, t: 'w' }, { n: 'G#', o: 4, t: 'b' }, { n: 'A', o: 4, t: 'w' }, { n: 'A#', o: 4, t: 'b' }, { n: 'B', o: 4, t: 'w' },
+            { n: 'C', o: 5, t: 'w' }, { n: 'C#', o: 5, t: 'b' }, { n: 'D', o: 5, t: 'w' }, { n: 'D#', o: 5, t: 'b' }, { n: 'E', o: 5, t: 'w' }
+        ];
+
+        // 歌曲資料
+        const songs = {
+            furElise: [
+                {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200}, 
+                {note: 'B4', len: 200}, {note: 'D5', len: 200}, {note: 'C5', len: 200}, {note: 'A4', len: 600},
+                {note: 'C4', len: 200}, {note: 'E4', len: 200}, {note: 'A4', len: 200}, {note: 'B4', len: 600},
+                {note: 'E4', len: 200}, {note: 'G#4', len: 200}, {note: 'B4', len: 200}, {note: 'C5', len: 600}
+            ],
+            twinkle: [
+                {note: 'C4', len: 400}, {note: 'C4', len: 400}, {note: 'G4', len: 400}, {note: 'G4', len: 400},
+                {note: 'A4', len: 400}, {note: 'A4', len: 400}, {note: 'G4', len: 800},
+                {note: 'F4', len: 400}, {note: 'F4', len: 400}, {note: 'E4', len: 400}, {note: 'E4', len: 400},
+                {note: 'D4', len: 400}, {note: 'D4', len: 400}, {note: 'C4', len: 800}
+            ],
+            scale: [
+                {note: 'C4', len: 300}, {note: 'D4', len: 300}, {note: 'E4', len: 300}, {note: 'F4', len: 300},
+                {note: 'G4', len: 300}, {note: 'A4', len: 300}, {note: 'B4', len: 300}, {note: 'C5', len: 600}
+            ]
+        };
+
+        function init() {
+            renderKeyboard();
+            // 自動滾動到中間
+            setTimeout(() => {
+                const scrollContainer = document.getElementById('pianoScroll');
+                // 粗估中間位置: 12個白鍵 * 36px ~= 432px
+                scrollContainer.scrollLeft = 400; 
+            }, 100);
+        }
+
+        // --- 核心修改：動態計算位置 ---
+        function renderKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            
+            // 從 CSS 變數獲取尺寸設定 (轉為數字)
+            const rootStyle = getComputedStyle(document.documentElement);
+            const whiteW = parseInt(rootStyle.getPropertyValue('--white-w'));
+            const blackW = parseInt(rootStyle.getPropertyValue('--black-w'));
+
+            let whiteKeyCount = 0; // 記錄白鍵數量，用於定位
+
+            notesOrder.forEach((n) => {
+                const key = document.createElement('div');
+                const noteId = n.n + n.o;
+                
+                if (n.t === 'w') {
+                    // 白鍵：直接依賴 Flexbox 排列，不需要設定 left
+                    key.className = 'key white';
+                    key.innerHTML = `<div class="note-label">${noteId}</div>`;
+                    whiteKeyCount++; // 增加計數
+                } else {
+                    // 黑鍵：絕對定位
+                    // 算法： (目前白鍵數 * 白鍵寬) - (黑鍵寬 / 2)
+                    // 這樣可以保證黑鍵永遠在白鍵的縫隙中間，無論尺寸怎麼改
+                    key.className = 'key black';
+                    const leftPos = (whiteKeyCount * whiteW) - (blackW / 2);
+                    key.style.left = `${leftPos}px`;
+                }
+
+                key.dataset.full = noteId;
+
+                // 綁定事件
+                const startEvent = (e) => { 
+                    // e.preventDefault(); // 在此處阻止預設行為可能會影響某些瀏覽器的點擊
+                    playNote(noteId); 
+                };
+                
+                key.addEventListener('mousedown', startEvent);
+                key.addEventListener('touchstart', (e) => {
+                     // 阻止預設行為以避免雙擊縮放，但不阻止 pianoScroll 的滾動
+                     if(e.cancelable && !e.target.classList.contains('note-label')) {
+                         e.preventDefault(); 
+                     }
+                     playNote(noteId);
+                });
+
+                keyboard.appendChild(key);
+            });
+            
+            setupGlissando();
+        }
+
+        function setupGlissando() {
+            const container = document.querySelector('.piano-container');
+            let lastNote = null;
+
+            container.addEventListener('touchmove', (e) => {
+                const touch = e.touches[0];
+                const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (element && element.classList.contains('key')) {
+                    const noteId = element.dataset.full;
+                    if (lastNote !== noteId) {
+                        playNote(noteId);
+                        lastNote = noteId;
+                    }
+                }
+            }, {passive: false});
+
+            container.addEventListener('touchend', () => lastNote = null);
+        }
+
+        function playTone(freq) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.2);
+        }
+
+        function playNote(noteId) {
+            const freq = noteFrequencies[noteId];
+            if (freq) {
+                playTone(freq);
+                highlightKey(noteId);
+                document.getElementById('statusText').innerText = `${noteId}`;
+            }
+        }
+
+        function highlightKey(noteId) {
+            const keys = document.querySelectorAll(`.key[data-full="${noteId}"]`);
+            keys.forEach(key => {
+                key.classList.add('active');
+                setTimeout(() => key.classList.remove('active'), 150);
+            });
+        }
+
+        // --- 自動播放器 ---
+        let isPlaying = false;
+        let playTimeout;
+
+        async function playSongSequence(songKey) {
+            const song = songs[songKey];
+            isPlaying = true;
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('songSelect').disabled = true;
+
+            for (let i = 0; i < song.length; i++) {
+                if (!isPlaying) break;
+                playNote(song[i].note);
+                await new Promise(r => playTimeout = setTimeout(r, song[i].len));
+                await new Promise(r => setTimeout(r, 50));
+            }
+            resetControls();
+        }
+
+        function resetControls() {
+            isPlaying = false;
+            clearTimeout(playTimeout);
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('songSelect').disabled = false;
+            document.getElementById('statusText').innerText = "播放結束";
+        }
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.resume().then(() => playSongSequence(document.getElementById('songSelect').value));
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', resetControls);
+
+        init();
+    </script>
+</body>
+</html>
