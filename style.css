@@ -1,0 +1,111 @@
+:root {
+    --white-key-width: 60px;
+    --white-key-height: 200px;
+    --black-key-width: 40px;
+    --black-key-height: 120px;
+    --piano-bg: #222;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: #111;
+    color: #eee;
+    touch-action: manipulation;
+    /* Allow some standard gestures but optimize for touch */
+    overflow-x: hidden;
+    min-height: 100vh;
+    /* Use dynamic viewport height for mobile browsers */
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 1.5rem;
+    /* Reduce padding on mobile */
+}
+
+.piano-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    background: var(--piano-bg);
+    padding: 20px 10px;
+    /* Reduce horizontal padding */
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    position: relative;
+    display: flex;
+    justify-content: center;
+    min-height: calc(var(--white-key-height) + 40px);
+    /* Ensure container has height */
+    margin-bottom: 20px;
+}
+
+.piano {
+    position: relative;
+    display: inline-flex;
+    height: var(--white-key-height);
+    user-select: none;
+}
+
+.key {
+    position: relative;
+    border: 1px solid #ccc;
+    border-radius: 0 0 5px 5px;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.1s, transform 0.05s;
+    z-index: 1;
+}
+
+.key.white {
+    width: var(--white-key-width);
+    height: var(--white-key-height);
+    background: linear-gradient(to bottom, #fff 0%, #eee 100%);
+    color: #333;
+}
+
+.key.white:active,
+.key.white.active {
+    background: linear-gradient(to bottom, #eee 0%, #ddd 100%);
+    transform: translateY(2px);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.key.black {
+    width: var(--black-key-width);
+    height: var(--black-key-height);
+    background: linear-gradient(to bottom, #333 0%, #000 100%);
+    color: #fff;
+    margin-left: calc(var(--black-key-width) / -2);
+    margin-right: calc(var(--black-key-width) / -2);
+    z-index: 2;
+    border: 1px solid #000;
+}
+
+.key.black:active,
+.key.black.active {
+    background: linear-gradient(to bottom, #222 0%, #111 100%);
+    transform: translateY(2px);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    :root {
+        --white-key-width: 45px;
+        --white-key-height: 160px;
+        --black-key-width: 30px;
+        --black-key-height: 100px;
+    }
+
+    .piano-container {
+        justify-content: flex-start;
+        /* Allow scrolling on small screens */
+        padding: 10px;
+    }
+}
