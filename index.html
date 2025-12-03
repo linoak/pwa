@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bulma 行動版線上鋼琴</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        /* 禁止選取文字，避免手機上長按選取干擾演奏 */
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #f5f5f5;
+            overflow: hidden; /* 防止整個頁面彈動 */
+        }
+
+        /* 鋼琴容器：允許水平捲動 */
+        .piano-container {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 20px 0;
+            background: #222;
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.5);
+            /* 隱藏捲軸但保留功能 */
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+        }
+        .piano-container::-webkit-scrollbar { 
+            display: none; 
+        }
+
+        .keyboard {
+            position: relative;
+            display: flex;
+            height: 250px;
+            /* 確保寬度足夠容納所有鍵 */
+            min-width: fit-content;
+            padding: 0 20px;
+        }
+
+        /* 白鍵樣式 */
+        .key.white {
+            width: 50px;
+            height: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 0 0 5px 5px;
+            z-index: 1;
+            box-shadow: 0 5px 5px rgba(0,0,0,0.1);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .key.white:active, .key.white.active {
+            background: #eee;
+            transform: translateY(2px);
+            box-shadow: 0 2px 2px rgba(0,0,0,0.1);
+        }
+
+        /* 黑鍵樣式 */
+        .key.black {
+            width: 30px;
+            height: 60%;
+            background: #111;
+            position: absolute;
+            z-index: 2;
+            border-radius: 0 0 3px 3px;
+            box-shadow: 2px 2px 2px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        /* 黑鍵位置計算 (基於白鍵寬度) */
+        /* C# */ .key.black[data-note$="#"][data-octave="3"]:nth-of-type(2) { left: 35px; }
+        /* D# */ .key.black[data-note$="#"][data-octave="3"]:nth-of-type(4) { left: 85px; }
+        /* F# */ .key.black[data-note$="#"][data-octave="3"]:nth-of-type(7) { left: 185px; }
+        /* G# */ .key.black[data-note$="#"][data-octave="3"]:nth-of-type(9) { left: 235px; }
+        /* A# */ .key.black[data-note$="#"][data-octave="3"]:nth-of-type(11) { left: 285px; }
+
+        /* Octave 4 */
+        /* C# */ .key.black[data-note$="#"][data-octave="4"]:nth-of-type(14) { left: 385px; }
+        /* D# */ .key.black[data-note$="#"][data-octave="4"]:nth-of-type(16) { left: 435px; }
+        /* F# */ .key.black[data-note$="#"][data-octave="4"]:nth-of-type(19) { left: 535px; }
+        /* G# */ .key.black[data-note$="#"][data-octave="4"]:nth-of-type(21) { left: 585px; }
+        /* A# */ .key.black[data-note$="#"][data-octave="4"]:nth-of-type(23) { left: 635px; }
+
+        /* Octave 5 */
+        /* C# */ .key.black[data-note$="#"][data-octave="5"]:nth-of-type(26) { left: 735px; }
+        /* D# */ .key.black[data-note$="#"][data-octave="5"]:nth-of-type(28) { left: 785px; }
+        
+        .key.black:active, .key.black.active {
+            background: #333;
+        }
+
+        /* Note Label */
+        .note-label {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: #888;
+            pointer-events: none;
+        }
+
+        .controls-panel {
+            background: white;
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 0;
+        }
+        
+        .playing-indicator {
+            height: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #3273dc;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <section class="section controls-panel">
+        <div class="container">
+            <h1 class="title is-4 has-text-centered mb-3">
+                <i class="fas fa-music"></i> Mobile Web Piano
+            </h1>
+            
+            <div class="columns is-mobile is-centered is-vcentered">
+                <div class="column is-narrow">
+                    <div class="select is-small is-rounded">
+                        <select id="songSelect">
+                            <option value="furElise">給愛麗絲 (Für Elise)</option>
+                            <option value="twinkle">小星星 (Twinkle Star)</option>
+                            <option value="scale">C 大調音階 (Scale)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="column is-narrow">
+                    <button class="button is-primary is-small is-rounded" id="playBtn">
+                        <i class="fas fa-play mr-1"></i> 播放
+                    </button>
+                    <button class="button is-danger is-small is-rounded" id="stopBtn" disabled>
+                        <i class="fas fa-stop mr-1"></i> 停止
+                    </button>
+                </div>
+            </div>
+            <div class="playing-indicator" id="statusText">點擊琴鍵開始</div>
+        </div>
+    </section>
+
+    <div class="piano-container" id="pianoScroll">
+        <div class="keyboard" id="keyboard">
+            </div>
+    </div>
+
+    <section class="section">
+        <div class="content has-text-centered is-small has-text-grey">
+            <p>手機使用者可左右滑動鍵盤區域來彈奏高低音。</p>
+        </div>
+    </section>
+
+    <script>
+        // 音頻上下文
+        let audioCtx;
+        
+        // 頻率表 (Hz)
+        const noteFrequencies = {
+            'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56, 'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00, 'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
+            'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13, 'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'G4': 392.00, 'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
+            'C5': 523.25, 'C#5': 554.37, 'D5': 587.33, 'D#5': 622.25, 'E5': 659.25, 'F5': 698.46
+        };
+
+        // 定義琴鍵順序 (用於生成 DOM)
+        const notesOrder = [
+            { note: 'C', octave: 3, type: 'white' }, { note: 'C#', octave: 3, type: 'black' },
+            { note: 'D', octave: 3, type: 'white' }, { note: 'D#', octave: 3, type: 'black' },
+            { note: 'E', octave: 3, type: 'white' },
+            { note: 'F', octave: 3, type: 'white' }, { note: 'F#', octave: 3, type: 'black' },
+            { note: 'G', octave: 3, type: 'white' }, { note: 'G#', octave: 3, type: 'black' },
+            { note: 'A', octave: 3, type: 'white' }, { note: 'A#', octave: 3, type: 'black' },
+            { note: 'B', octave: 3, type: 'white' },
+            { note: 'C', octave: 4, type: 'white' }, { note: 'C#', octave: 4, type: 'black' },
+            { note: 'D', octave: 4, type: 'white' }, { note: 'D#', octave: 4, type: 'black' },
+            { note: 'E', octave: 4, type: 'white' },
+            { note: 'F', octave: 4, type: 'white' }, { note: 'F#', octave: 4, type: 'black' },
+            { note: 'G', octave: 4, type: 'white' }, { note: 'G#', octave: 4, type: 'black' },
+            { note: 'A', octave: 4, type: 'white' }, { note: 'A#', octave: 4, type: 'black' },
+            { note: 'B', octave: 4, type: 'white' },
+            { note: 'C', octave: 5, type: 'white' }, { note: 'C#', octave: 5, type: 'black' },
+            { note: 'D', octave: 5, type: 'white' }, { note: 'D#', octave: 5, type: 'black' },
+            { note: 'E', octave: 5, type: 'white' }
+        ];
+
+        // 歌曲資料
+        const songs = {
+            furElise: [
+                {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200}, 
+                {note: 'B4', len: 200}, {note: 'D5', len: 200}, {note: 'C5', len: 200}, {note: 'A4', len: 600},
+                {note: 'C4', len: 200}, {note: 'E4', len: 200}, {note: 'A4', len: 200}, {note: 'B4', len: 600},
+                {note: 'E4', len: 200}, {note: 'G#4', len: 200}, {note: 'B4', len: 200}, {note: 'C5', len: 600},
+                {note: 'E4', len: 200}, {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200}, {note: 'D#5', len: 200}, {note: 'E5', len: 200},
+                {note: 'B4', len: 200}, {note: 'D5', len: 200}, {note: 'C5', len: 200}, {note: 'A4', len: 600}
+            ],
+            twinkle: [
+                {note: 'C4', len: 400}, {note: 'C4', len: 400}, {note: 'G4', len: 400}, {note: 'G4', len: 400},
+                {note: 'A4', len: 400}, {note: 'A4', len: 400}, {note: 'G4', len: 800},
+                {note: 'F4', len: 400}, {note: 'F4', len: 400}, {note: 'E4', len: 400}, {note: 'E4', len: 400},
+                {note: 'D4', len: 400}, {note: 'D4', len: 400}, {note: 'C4', len: 800}
+            ],
+            scale: [
+                {note: 'C4', len: 300}, {note: 'D4', len: 300}, {note: 'E4', len: 300}, {note: 'F4', len: 300},
+                {note: 'G4', len: 300}, {note: 'A4', len: 300}, {note: 'B4', len: 300}, {note: 'C5', len: 600}
+            ]
+        };
+
+        // 初始化
+        function init() {
+            renderKeyboard();
+            // 自動滾動到中間 (C4附近)
+            const scrollContainer = document.getElementById('pianoScroll');
+            scrollContainer.scrollLeft = 300; 
+        }
+
+        // 渲染鍵盤
+        function renderKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            notesOrder.forEach((n) => {
+                const key = document.createElement('div');
+                const noteId = n.note + n.octave;
+                key.className = `key ${n.type}`;
+                key.dataset.note = n.note;
+                key.dataset.octave = n.octave;
+                key.dataset.full = noteId;
+                
+                // 只有白鍵顯示標籤，保持簡潔
+                if (n.type === 'white') {
+                    key.innerHTML = `<div class="note-label">${noteId}</div>`;
+                }
+
+                // 滑鼠事件
+                key.addEventListener('mousedown', () => playNote(noteId));
+                
+                // 觸控事件 (防止預設行為，例如放大或捲動)
+                key.addEventListener('touchstart', (e) => {
+                    // e.preventDefault(); // 注意：如果在 .piano-container 上 preventDefault 會無法滑動捲軸，這裡保留預設
+                    playNote(noteId);
+                });
+
+                keyboard.appendChild(key);
+            });
+
+            // 處理觸控滑動演奏 (Glissando)
+            // 這種方式讓手指在鍵盤上滑動時也能觸發經過的琴鍵
+            const keyboardContainer = document.querySelector('.piano-container');
+            let lastTouchedKey = null;
+
+            keyboardContainer.addEventListener('touchmove', (e) => {
+                // 這裡 preventDefault 是為了防止在按住琴鍵滑動時觸發瀏覽器的上一頁/下一頁手勢
+                // 但要小心不要擋住 .piano-container 的水平捲動
+                // 這裡的邏輯比較複雜，簡單起見，我們只偵測位置
+                
+                const touch = e.touches[0];
+                const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                
+                if (element && element.classList.contains('key')) {
+                    const noteId = element.dataset.full;
+                    if (lastTouchedKey !== noteId) {
+                        playNote(noteId);
+                        lastTouchedKey = noteId;
+                    }
+                }
+            }, {passive: false});
+
+            keyboardContainer.addEventListener('touchend', () => {
+                lastTouchedKey = null;
+            });
+        }
+
+        // 發聲邏輯 (Oscillator)
+        function playTone(freq) {
+            // 初始化 AudioContext (瀏覽器策略要求使用者互動後才能啟動)
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            osc.type = 'triangle'; // 三角波聽起來比較像簡單的鋼琴/長笛
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            // Envelope (ADSR) - 讓聲音不要突然切斷
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.02); // Attack
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5); // Decay
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.5);
+        }
+
+        // 播放單音並處理視覺效果
+        function playNote(noteId) {
+            const freq = noteFrequencies[noteId];
+            if (freq) {
+                playTone(freq);
+                highlightKey(noteId);
+                document.getElementById('statusText').innerText = `Playing: ${noteId}`;
+            }
+        }
+
+        // 視覺回饋
+        function highlightKey(noteId) {
+            const keys = document.querySelectorAll(`.key[data-full="${noteId}"]`);
+            keys.forEach(key => {
+                key.classList.add('active');
+                setTimeout(() => key.classList.remove('active'), 200);
+            });
+        }
+
+        // --- 自動播放邏輯 ---
+        let isPlaying = false;
+        let playTimeout;
+
+        async function playSongSequence(songKey) {
+            const song = songs[songKey];
+            const playBtn = document.getElementById('playBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const select = document.getElementById('songSelect');
+
+            if (!song) return;
+
+            // UI 狀態更新
+            isPlaying = true;
+            playBtn.disabled = true;
+            stopBtn.disabled = false;
+            select.disabled = true;
+
+            for (let i = 0; i < song.length; i++) {
+                if (!isPlaying) break; // 檢查停止標記
+
+                const noteData = song[i];
+                playNote(noteData.note);
+                
+                // 等待時間 (BPM 控制，這裡簡單用 setTimeout)
+                await new Promise(resolve => {
+                    playTimeout = setTimeout(resolve, noteData.len); 
+                });
+                
+                // 音符之間的微小間隔，讓同音連奏聽起來更清楚
+                await new Promise(resolve => setTimeout(resolve, 50)); 
+            }
+
+            // 播放結束或停止後的重置
+            resetControls();
+        }
+
+        function stopSong() {
+            isPlaying = false;
+            clearTimeout(playTimeout);
+            resetControls();
+            document.getElementById('statusText').innerText = "已停止";
+        }
+
+        function resetControls() {
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('songSelect').disabled = false;
+            if(isPlaying) { // 如果是自然播放結束
+               document.getElementById('statusText').innerText = "播放結束"; 
+               isPlaying = false;
+            }
+        }
+
+        // 事件綁定
+        document.getElementById('playBtn').addEventListener('click', () => {
+            const songKey = document.getElementById('songSelect').value;
+            // 確保 AudioContext 被啟動
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.resume().then(() => {
+                playSongSequence(songKey);
+            });
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', stopSong);
+
+        // 啟動
+        init();
+
+    </script>
+</body>
+</html>
